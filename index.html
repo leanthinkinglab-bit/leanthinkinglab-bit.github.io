@@ -81,7 +81,8 @@
         // 데이터 가져오기 및 UI 업데이트를 실행하는 메인 함수
         async function fetchDataAndUpdateUI() {
             try {
-                const response = await fetch(API_URL);
+                // [수정] CORS 문제를 해결하기 위해 fetch 옵션을 추가합니다.
+                const response = await fetch(API_URL, { method: 'GET', redirect: 'follow' });
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const result = await response.json();
 
@@ -250,3 +251,4 @@
     </script>
 </body>
 </html>
+
