@@ -14,17 +14,18 @@
         .fade-in { opacity: 1 !important; }
     </style>
 </head>
-<body class="bg-gray-900 text-white p-4 sm:p-6">
+<body class="bg-gray-900 text-white p-4 sm:p-6 flex flex-col min-h-screen">
 
     <div id="loader" class="fixed inset-0 bg-gray-900 bg-opacity-80 flex justify-center items-center z-50">
         <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-green-500"></div>
     </div>
 
-    <div class="max-w-4xl mx-auto opacity-0 transition-opacity duration-500" id="main-content">
+    <div class="max-w-4xl mx-auto opacity-0 transition-opacity duration-500 w-full flex-grow" id="main-content">
         <header class="text-center mb-6">
             <h1 class="text-3xl sm:text-4xl font-bold text-green-400">김프매니저</h1>
             <p class="text-gray-400 mt-2">가장 저렴한 코인 송금 경로를 찾아보세요</p>
-            <!-- 업데이트 시간 및 새로고침 버튼 컨테이너 수정 -->
+            <p class="text-xs text-gray-500 mt-1">김치 프리미엄은 1분 마다 업데이트 됩니다.</p>
+            
             <div id="update-container" class="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 mt-4 mb-8">
                 <p id="timestamp" class="text-sm text-gray-400 order-2 sm:order-1"></p>
                 <button id="refresh-btn" class="order-1 sm:order-2 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-colors duration-300">
@@ -46,42 +47,53 @@
 
     </div>
 
+    <footer class="text-center text-xs text-gray-600 mt-8 pb-4 w-full">
+        <p>본 정보는 투자 참고용이며, 투자 판단에 대한 최종 책임은 본인에게 있습니다.</p>
+        <p class="mt-1">데이터 지연 및 오류가 발생할 수 있으니 중요한 결정 시에는 반드시 교차 확인하시기 바랍니다.</p>
+    </footer>
+
     <script>
         const gasUrl = 'https://script.google.com/macros/s/AKfycbyVotfFjwcAji9JV4p9tOzLycdC-seU2l943yP_tuDLx8fuLynf50ztRZQW1VNII3lILg/exec';
-        let timeUpdateInterval; // 동적 시간 표시를 위한 전역 변수
+        let timeUpdateInterval;
+        let autoRefreshTimer;
+
+        const coinLogos = {
+            'XRP': 'https://s2.coinmarketcap.com/static/img/coins/64x64/52.png',
+            'TRX': 'https://s2.coinmarketcap.com/static/img/coins/64x64/1958.png',
+            'USDT': 'https://s2.coinmarketcap.com/static/img/coins/64x64/825.png',
+            'USDC': 'https://s2.coinmarketcap.com/static/img/coins/64x64/3408.png'
+        };
 
         document.addEventListener('DOMContentLoaded', () => {
             fetchDataWithRetry();
             const refreshButton = document.getElementById('refresh-btn');
-            refreshButton.addEventListener('click', handleRefresh);
+            refreshButton.addEventListener('click', () => handleRefresh(true)); // User-triggered refresh
         });
 
-        function handleRefresh() {
+        function handleRefresh(isManual = false) {
             const loader = document.getElementById('loader');
             const mainContent = document.getElementById('main-content');
             const timestampEl = document.getElementById('timestamp');
             
-            loader.style.display = 'flex';
-            mainContent.classList.remove('fade-in');
-            timestampEl.textContent = '업데이트 중...';
-            if (timeUpdateInterval) clearInterval(timeUpdateInterval); // 기존 타이머 제거
+            if (isManual) {
+                loader.style.display = 'flex';
+                mainContent.classList.remove('fade-in');
+                timestampEl.textContent = '업데이트 중...';
+            }
+            
+            if (timeUpdateInterval) clearInterval(timeUpdateInterval);
+            if (autoRefreshTimer) clearTimeout(autoRefreshTimer);
             
             fetchDataWithRetry();
         }
 
         function fetchDataWithRetry(retries = 5, interval = 2000) {
             fetch(gasUrl)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    return response.json();
-                })
+                .then(response => response.json())
                 .then(result => {
                     if (result.status === 'success') {
                         updateUI(result);
                     } else if (result.status === 'pending' && retries > 0) {
-                        console.log(`Data is pending. Retrying in ${interval / 1000}s... (${retries} retries left)`);
                         setTimeout(() => fetchDataWithRetry(retries - 1, interval), interval);
                         if (retries === 5) {
                            displaySpecialMessage(result.message, 'pending');
@@ -103,52 +115,55 @@
             const loader = document.getElementById('loader');
             const cardsContainer = document.getElementById('coin-cards');
             const recommendationContainer = document.getElementById('recommendation-box');
-            const timestampEl = document.getElementById('timestamp');
-
+            
             if (!result.data || !result.data.premiums) {
                 displaySpecialMessage('수신된 데이터 형식이 올바르지 않습니다.', 'error');
                 return;
             }
 
             const premiums = result.data.premiums;
-            const history = result.data.history || {};
-            
             const validPremiums = premiums.filter(p => p.kimp !== null);
             const minKimp = validPremiums.length > 0 ? Math.min(...validPremiums.map(p => p.kimp)) : -Infinity;
             const recommendedCoin = validPremiums.find(p => p.kimp === minKimp);
 
-            if(recommendedCoin) {
-                recommendationContainer.innerHTML = createRecommendationBox(recommendedCoin);
-            } else {
-                recommendationContainer.innerHTML = '';
-            }
+            recommendationContainer.innerHTML = recommendedCoin ? createRecommendationBox(recommendedCoin) : '';
+            cardsContainer.innerHTML = premiums.map(p => createCoinCard(p, p.kimp === minKimp)).join('');
             
-            cardsContainer.innerHTML = premiums.map(p => createCoinCard(p, p.kimp === minKimp, history[p.coin])).join('');
-            
-            // --- 동적 시간 표시 로직 ---
-            const updateTime = new Date(result.timestamp);
-            if (timeUpdateInterval) clearInterval(timeUpdateInterval); // 이전 인터벌 제거
-
-            const updateTimestampText = () => {
-                const now = new Date();
-                const secondsPast = Math.round((now - updateTime) / 1000);
-                if (secondsPast < 5) {
-                    timestampEl.textContent = '방금 전 업데이트';
-                } else if (secondsPast < 60) {
-                    timestampEl.textContent = `${secondsPast}초 전에 업데이트됨`;
-                } else {
-                    const minutesPast = Math.floor(secondsPast / 60);
-                    timestampEl.textContent = `${minutesPast}분 전에 업데이트됨`;
-                }
-            };
-            updateTimestampText(); // 즉시 한번 실행
-            timeUpdateInterval = setInterval(updateTimestampText, 5000); // 5초마다 업데이트
-            // -------------------------
+            setupDynamicTimestamp(result.timestamp);
             
             loader.style.display = 'none';
             mainContent.classList.add('fade-in');
         }
         
+        function setupDynamicTimestamp(isoTimestamp) {
+            const timestampEl = document.getElementById('timestamp');
+            const updateTime = new Date(isoTimestamp);
+
+            if (timeUpdateInterval) clearInterval(timeUpdateInterval);
+            if (autoRefreshTimer) clearTimeout(autoRefreshTimer);
+
+            const update = () => {
+                const now = new Date();
+                const secondsPast = Math.round((now - updateTime) / 1000);
+                
+                if (secondsPast < 5) timestampEl.textContent = '방금 전 업데이트';
+                else if (secondsPast < 60) timestampEl.textContent = `${secondsPast}초 전에 업데이트됨`;
+                else {
+                    const minutesPast = Math.floor(secondsPast / 60);
+                    timestampEl.textContent = `${minutesPast}분 전에 업데이트됨`;
+                }
+            };
+            
+            update();
+            timeUpdateInterval = setInterval(update, 5000);
+            
+            const secondsUntilAutoRefresh = 65 - Math.round((new Date() - updateTime) / 1000);
+            autoRefreshTimer = setTimeout(() => {
+                console.log("Auto-refreshing data...");
+                handleRefresh(false); // Not a manual trigger
+            }, Math.max(secondsUntilAutoRefresh, 0) * 1000);
+        }
+
         function createRecommendationBox(data) {
             return `
                 <div class="bg-gray-800 rounded-lg p-4 text-center border-2 border-green-500 recommended-glow">
@@ -160,49 +175,31 @@
             `;
         }
 
-        function createCoinCard(data, isRecommended, history = []) {
+        function createCoinCard(data, isRecommended) {
             const kimpColor = data.kimp > 0 ? 'text-red-400' : 'text-blue-400';
-            const recommendedClass = 'bg-gray-800 border-gray-700';
             const errorClass = data.kimp === null ? 'opacity-50' : '';
-            const finalCardClass = isRecommended ? `border-2 border-green-600 ${recommendedClass}` : `border ${recommendedClass}`;
+            const finalCardClass = isRecommended ? 'border-2 border-green-600 bg-gray-800' : 'border border-gray-700 bg-gray-800';
+            const logoUrl = coinLogos[data.coin] || '';
 
             return `
                 <div class="${finalCardClass} ${errorClass} p-4 rounded-lg transform hover:scale-105 transition-transform duration-300">
-                    <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-start justify-between mb-2">
                         <h2 class="text-xl font-bold">${data.coin}</h2>
-                        ${isRecommended && data.kimp !== null ? '<span class="text-xs bg-green-500 text-white font-bold px-2 py-1 rounded-full">추천</span>' : ''}
+                        <img src="${logoUrl}" alt="${data.coin} 로고" class="w-7 h-7">
                     </div>
+                    ${isRecommended && data.kimp !== null ? '<span class="absolute top-3 right-3 text-xs bg-green-500 text-white font-bold px-2 py-1 rounded-full">추천</span>' : ''}
+                    
                     ${data.kimp !== null ? `
                     <p class="text-3xl font-black ${kimpColor}">${data.kimp.toFixed(2)}%</p>
                     <div class="text-xs text-gray-400 mt-3">
                         <p>업비트: ${data.upbitPrice.toLocaleString()}원</p>
                         <p>바이낸스: $${data.binancePrice.toFixed(4)}</p>
-                    </div>
-                    <div class="mt-4 h-10">
-                        ${history && history.length > 0 ? generateSparkline(history) : '<p class="text-xs text-gray-500">과거 데이터 없음</p>'}
-                    </div>
-                    ` : `
+                    </div>` : `
                     <p class="text-lg font-bold text-gray-500">데이터 없음</p>
                     <p class="text-xs text-gray-600 mt-1">${data.error || '시세 정보 수신 실패'}</p>
-                    <div class="mt-4 h-10"></div>
                     `}
                 </div>
             `;
-        }
-        
-        function generateSparkline(history) {
-            const values = history.map(h => h.value);
-            const max = Math.max(...values);
-            const min = Math.min(...values);
-            const range = max - min === 0 ? 1 : max - min;
-            
-            const points = values.map((v, i) => {
-                const x = (i / (values.length - 1)) * 100;
-                const y = 30 - ((v - min) / range) * 30;
-                return `${x},${y}`;
-            }).join(' ');
-
-            return `<svg viewBox="0 0 100 45" class="w-full h-full"><line x1="0" y1="0" x2="100" y2="0" stroke="#374151" stroke-width="0.5"/><line x1="0" y1="15" x2="100" y2="15" stroke="#374151" stroke-width="0.5"/><line x1="0" y1="30" x2="100" y2="30" stroke="#374151" stroke-width="0.5"/><polyline points="${points}" stroke="#4A5568" stroke-width="2" fill="none"/><text x="0" y="40" dominant-baseline="hanging" text-anchor="start" class="text-[10px]" fill="#6b7280">${history[0].date}</text><text x="100" y="40" dominant-baseline="hanging" text-anchor="end" class="text-[10px]" fill="#6b7280">현재</text></svg>`;
         }
         
         function displaySpecialMessage(message, type) {
@@ -219,3 +216,4 @@
     </script>
 </body>
 </html>
+
