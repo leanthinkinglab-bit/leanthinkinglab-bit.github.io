@@ -66,7 +66,8 @@
         // =================================================================
         // 설정 (Configuration)
         // =================================================================
-        const API_URL = "https://script.google.com/macros/s/AKfycbxWab9Nn8d8U3i3hDqtmNrAMFMpSNueUCSdKc1OHs9ORPWct5UIqcf90FVYCsabgN25DA/exec";
+        // [중요] 파트너님의 새로운 웹 앱 URL로 교체되었습니다.
+        const API_URL = "https://script.google.com/macros/s/AKfycbw8fFboXNvT5cAaeozhZVhaaBQHwWLMibAGV2fQeZdspZhdq7njEo1YulIVm24Vr80hSg/exec";
         const COINS = [
             { id: 'XRP', name: 'XRP (리플)' },
             { id: 'TRX', name: 'TRX (트론)' },
@@ -78,44 +79,44 @@
         // 메인 로직 (Main Logic)
         // =================================================================
         
-        // 데이터 가져오기 및 UI 업데이트를 실행하는 메인 함수
         async function fetchDataAndUpdateUI() {
             try {
-                const response = await fetch(API_URL, { method: 'GET', redirect: 'follow' });
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                // Google Apps Script 리디렉션을 안전하게 처리하기 위해 fetch 옵션을 제거하고 단순화합니다.
+                const response = await fetch(API_URL);
+                if (!response.ok) {
+                    throw new Error(`서버 응답 오류: ${response.status}`);
+                }
                 const result = await response.json();
 
-                // [수정] 변경된 백엔드 응답 구조에 맞게 데이터 경로를 수정합니다.
                 if (result.realtime && result.realtime.status === 'success') {
                     updateUI(result.realtime, result.historical || {});
                 } else {
-                    throw new Error(result.realtime.message || 'Failed to load data.');
+                    throw new Error(result.realtime ? result.realtime.message : '백엔드에서 유효한 데이터를 받지 못했습니다.');
                 }
 
             } catch (error) {
-                console.error("Error fetching data:", error);
+                console.error("데이터 처리 중 오류 발생:", error);
                 displayError(error.message);
             } finally {
                 hideLoader();
             }
         }
 
-        // UI를 업데이트하는 함수
         function updateUI(realtime, historical) {
             document.getElementById('last-updated').textContent = `최종 업데이트: ${realtime.last_updated}`;
             
-            // 가장 프리미엄이 낮은 코인 찾기
             const coinData = Object.entries(realtime.data);
-            if (coinData.length === 0) return;
+            if (coinData.length === 0) {
+                displayError("수신된 코인 데이터가 없습니다.");
+                return;
+            };
 
             const [bestCoinId, bestCoinData] = coinData.reduce((best, current) => 
                 parseFloat(current[1].premium) < parseFloat(best[1].premium) ? current : best
             );
 
-            // 추천 박스 업데이트
             updateRecommendationBox(bestCoinId, bestCoinData);
             
-            // 각 코인 카드 업데이트
             COINS.forEach(coin => {
                 const cardElement = document.getElementById(`card-${coin.id}`);
                 const data = realtime.data[coin.id];
@@ -127,19 +128,17 @@
             });
         }
         
-        // 페이지 로드 시, 그리고 1분마다 데이터 갱신
         document.addEventListener('DOMContentLoaded', () => {
             fetchDataAndUpdateUI();
-            setInterval(fetchDataAndUpdateUI, 60000); // 1분마다 갱신
+            setInterval(fetchDataAndUpdateUI, 60000);
         });
 
         // =================================================================
         // UI 생성 및 스타일링 헬퍼 함수 (UI Helpers)
         // =================================================================
 
-        // 코인 카드 내부 HTML 생성
         function generateCardHTML(coin, data, isRecommended, history) {
-            if (!data) return `<div class="text-center text-gray-500">데이터 없음</div>`;
+            if (!data) return `<div class="text-center text-gray-500 p-4">데이터를 불러올 수 없습니다.</div>`;
 
             const premium = parseFloat(data.premium);
             const premiumColor = premium < 0 ? 'text-blue-400' : (premium > 1 ? 'text-red-400' : 'text-white');
@@ -154,13 +153,12 @@
                     ${generateChartSVG(history)}
                 </div>
                 <div class="text-xs text-gray-400 flex justify-between pt-3 border-t border-gray-700">
-                    <span>업비트: <span class="font-semibold text-white">${data.upbit_price.toLocaleString()} KRW</span></span>
-                    <span>바이낸스: <span class="font-semibold text-white">${data.binance_price.toFixed(4)} USD</span></span>
+                    <span>업비트: <span class="font-semibold text-white">${(data.upbit_price || 0).toLocaleString()} KRW</span></span>
+                    <span>바이낸스: <span class="font-semibold text-white">${(data.binance_price || 0).toFixed(4)} USD</span></span>
                 </div>
             `;
         }
-
-        // 추천 카드 스타일 업데이트
+        
         function updateCardStyle(element, isRecommended) {
             if (isRecommended) {
                 element.classList.add('recommended-glow', 'border-green-500');
@@ -171,9 +169,7 @@
             }
         }
         
-        // 추천 안내 박스 업데이트
         function updateRecommendationBox(bestCoinId, bestCoinData) {
-            const box = document.getElementById('recommendation-box');
             const coinEl = document.getElementById('recommendation-coin');
             const reasonEl = document.getElementById('recommendation-reason');
 
@@ -182,12 +178,8 @@
             coinEl.classList.add('text-green-400');
             
             reasonEl.innerHTML = `현재 <span class="font-bold text-white">${bestCoinId}</span>의 김치 프리미엄이 <span class="font-bold text-white">${bestCoinData.premium}%</span>로 가장 낮아<br>자금 이체 시 가장 유리합니다.`;
-            
-            box.classList.add('recommended-glow', 'border-green-500');
-            box.classList.remove('border-gray-700');
         }
 
-        // SVG 차트 생성
         function generateChartSVG(history) {
             if (!history || history.length < 2) {
                 return `<div class="w-full h-full flex items-center justify-center text-gray-600 text-sm">기간 데이터 부족</div>`;
@@ -196,9 +188,7 @@
             const values = history.map(h => h.value);
             const min = Math.min(...values);
             const max = Math.max(...values);
-            const range = max - min === 0 ? 1 : max - min;
-
-            // Y축 스케일 자동 조정
+            
             const yMax = Math.ceil(max / 2) * 2;
             const yMin = Math.floor(min / 2) * 2;
             const yRange = yMax - yMin === 0 ? 1 : yMax - yMin;
@@ -230,7 +220,6 @@
             `;
         }
 
-        // 로더 숨기기
         function hideLoader() {
             const loader = document.getElementById('loader');
             const content = document.getElementById('content');
@@ -238,7 +227,6 @@
             if (content) content.classList.add('fade-in');
         }
 
-        // 에러 메시지 표시
         function displayError(message) {
             const content = document.getElementById('content');
             content.innerHTML = `<div class="text-center text-red-400 bg-red-900 bg-opacity-30 p-4 rounded-lg">
@@ -246,7 +234,6 @@
                 <p class="text-sm mt-1">${message}</p>
                 <p class="text-xs mt-2 text-gray-400">잠시 후 페이지를 새로고침해주세요.</p>
             </div>`;
-            content.classList.add('fade-in');
         }
     </script>
 </body>
