@@ -26,14 +26,8 @@
             <p class="text-gray-400 mt-2">가장 저렴한 코인 송금 경로를 찾아보세요</p>
             <p class="text-xs text-gray-500 mt-1">김치 프리미엄은 1분 마다 업데이트 됩니다.</p>
             
-            <div id="update-container" class="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 mt-4 mb-8">
-                <p id="timestamp" class="text-sm text-gray-400 order-2 sm:order-1"></p>
-                <button id="refresh-btn" class="order-1 sm:order-2 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-colors duration-300">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 110 2H4a1 1 0 01-1-1V4a1 1 0 011-1zm10.999 9.099a1 1 0 01-1.112 1.666 5.002 5.002 0 00-9.777-1.566 1 1 0 01-1.885-.666 7.002 7.002 0 0111.601-2.566 1 1 0 01.512 1.333z" clip-rule="evenodd" />
-                    </svg>
-                    <span>새로고침</span>
-                </button>
+            <div id="update-container" class="text-center mt-4 mb-8">
+                <p id="timestamp" class="text-sm text-gray-400"></p>
             </div>
         </header>
 
@@ -66,24 +60,11 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             fetchDataWithRetry();
-            const refreshButton = document.getElementById('refresh-btn');
-            refreshButton.addEventListener('click', () => handleRefresh(true)); // User-triggered refresh
         });
 
-        function handleRefresh(isManual = false) {
-            const loader = document.getElementById('loader');
-            const mainContent = document.getElementById('main-content');
-            const timestampEl = document.getElementById('timestamp');
-            
-            if (isManual) {
-                loader.style.display = 'flex';
-                mainContent.classList.remove('fade-in');
-                timestampEl.textContent = '업데이트 중...';
-            }
-            
+        function handleRefresh() {
             if (timeUpdateInterval) clearInterval(timeUpdateInterval);
             if (autoRefreshTimer) clearTimeout(autoRefreshTimer);
-            
             fetchDataWithRetry();
         }
 
@@ -160,7 +141,7 @@
             const secondsUntilAutoRefresh = 65 - Math.round((new Date() - updateTime) / 1000);
             autoRefreshTimer = setTimeout(() => {
                 console.log("Auto-refreshing data...");
-                handleRefresh(false); // Not a manual trigger
+                handleRefresh();
             }, Math.max(secondsUntilAutoRefresh, 0) * 1000);
         }
 
@@ -184,10 +165,12 @@
             return `
                 <div class="${finalCardClass} ${errorClass} p-4 rounded-lg transform hover:scale-105 transition-transform duration-300">
                     <div class="flex items-start justify-between mb-2">
-                        <h2 class="text-xl font-bold">${data.coin}</h2>
-                        <img src="${logoUrl}" alt="${data.coin} 로고" class="w-7 h-7">
+                        <div class="flex items-center space-x-2">
+                            <h2 class="text-xl font-bold">${data.coin}</h2>
+                            ${isRecommended && data.kimp !== null ? '<span class="text-xs bg-green-500 text-white font-bold px-2 py-1 rounded-full">추천</span>' : ''}
+                        </div>
+                        <img src="${logoUrl}" alt="${data.coin} 로고" class="w-10 h-10 rounded-full border-2 border-gray-700">
                     </div>
-                    ${isRecommended && data.kimp !== null ? '<span class="absolute top-3 right-3 text-xs bg-green-500 text-white font-bold px-2 py-1 rounded-full">추천</span>' : ''}
                     
                     ${data.kimp !== null ? `
                     <p class="text-3xl font-black ${kimpColor}">${data.kimp.toFixed(2)}%</p>
