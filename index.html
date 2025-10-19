@@ -28,6 +28,7 @@
             
             <div id="update-container" class="text-center mt-4 mb-8">
                 <p id="timestamp" class="text-sm text-gray-400"></p>
+                <p id="exchange-rate" class="text-sm text-gray-500 mt-1"></p>
             </div>
         </header>
 
@@ -96,6 +97,7 @@
             const loader = document.getElementById('loader');
             const cardsContainer = document.getElementById('coin-cards');
             const recommendationContainer = document.getElementById('recommendation-box');
+            const exchangeRateEl = document.getElementById('exchange-rate');
             
             if (!result.data || !result.data.premiums) {
                 displaySpecialMessage('수신된 데이터 형식이 올바르지 않습니다.', 'error');
@@ -106,6 +108,12 @@
             const validPremiums = premiums.filter(p => p.kimp !== null);
             const minKimp = validPremiums.length > 0 ? Math.min(...validPremiums.map(p => p.kimp)) : -Infinity;
             const recommendedCoin = validPremiums.find(p => p.kimp === minKimp);
+
+            if (recommendedCoin && recommendedCoin.usdKrwRate) {
+                exchangeRateEl.textContent = `적용 환율: ${recommendedCoin.usdKrwRate.toLocaleString()}원/$`;
+            } else {
+                exchangeRateEl.textContent = '';
+            }
 
             recommendationContainer.innerHTML = recommendedCoin ? createRecommendationBox(recommendedCoin) : '';
             cardsContainer.innerHTML = premiums.map(p => createCoinCard(p, p.kimp === minKimp)).join('');
