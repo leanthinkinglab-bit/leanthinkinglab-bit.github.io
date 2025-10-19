@@ -24,13 +24,14 @@
         <header class="text-center mb-6">
             <h1 class="text-3xl sm:text-4xl font-bold text-green-400">김프매니저</h1>
             <p class="text-gray-400 mt-2">가장 저렴한 코인 송금 경로를 찾아보세요</p>
-            <!-- 업데이트 시간 및 새로고침 버튼 컨테이너 -->
-            <div id="update-container" class="flex items-center justify-center space-x-2 mt-3">
-                <p id="timestamp" class="text-sm text-gray-400"></p>
-                <button id="refresh-btn" class="p-1 rounded-full text-gray-400 hover:bg-gray-700 hover:text-white transition-colors">
+            <!-- 업데이트 시간 및 새로고침 버튼 컨테이너 수정 -->
+            <div id="update-container" class="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 mt-4 mb-8">
+                <p id="timestamp" class="text-sm text-gray-400 order-2 sm:order-1"></p>
+                <button id="refresh-btn" class="order-1 sm:order-2 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-colors duration-300">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                         <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 110 2H4a1 1 0 01-1-1V4a1 1 0 011-1zm10.999 9.099a1 1 0 01-1.112 1.666 5.002 5.002 0 00-9.777-1.566 1 1 0 01-1.885-.666 7.002 7.002 0 0111.601-2.566 1 1 0 01.512 1.333z" clip-rule="evenodd" />
                     </svg>
+                    <span>새로고침</span>
                 </button>
             </div>
         </header>
@@ -47,6 +48,7 @@
 
     <script>
         const gasUrl = 'https://script.google.com/macros/s/AKfycbyVotfFjwcAji9JV4p9tOzLycdC-seU2l943yP_tuDLx8fuLynf50ztRZQW1VNII3lILg/exec';
+        let timeUpdateInterval; // 동적 시간 표시를 위한 전역 변수
 
         document.addEventListener('DOMContentLoaded', () => {
             fetchDataWithRetry();
@@ -57,9 +59,12 @@
         function handleRefresh() {
             const loader = document.getElementById('loader');
             const mainContent = document.getElementById('main-content');
+            const timestampEl = document.getElementById('timestamp');
             
             loader.style.display = 'flex';
-            mainContent.classList.remove('fade-in'); // 화면을 잠시 투명하게 만들어 자연스러운 전환 효과
+            mainContent.classList.remove('fade-in');
+            timestampEl.textContent = '업데이트 중...';
+            if (timeUpdateInterval) clearInterval(timeUpdateInterval); // 기존 타이머 제거
             
             fetchDataWithRetry();
         }
@@ -120,8 +125,25 @@
             
             cardsContainer.innerHTML = premiums.map(p => createCoinCard(p, p.kimp === minKimp, history[p.coin])).join('');
             
-            const date = new Date(result.timestamp);
-            timestampEl.textContent = `마지막 업데이트: ${date.toLocaleString('ko-KR')}`;
+            // --- 동적 시간 표시 로직 ---
+            const updateTime = new Date(result.timestamp);
+            if (timeUpdateInterval) clearInterval(timeUpdateInterval); // 이전 인터벌 제거
+
+            const updateTimestampText = () => {
+                const now = new Date();
+                const secondsPast = Math.round((now - updateTime) / 1000);
+                if (secondsPast < 5) {
+                    timestampEl.textContent = '방금 전 업데이트';
+                } else if (secondsPast < 60) {
+                    timestampEl.textContent = `${secondsPast}초 전에 업데이트됨`;
+                } else {
+                    const minutesPast = Math.floor(secondsPast / 60);
+                    timestampEl.textContent = `${minutesPast}분 전에 업데이트됨`;
+                }
+            };
+            updateTimestampText(); // 즉시 한번 실행
+            timeUpdateInterval = setInterval(updateTimestampText, 5000); // 5초마다 업데이트
+            // -------------------------
             
             loader.style.display = 'none';
             mainContent.classList.add('fade-in');
