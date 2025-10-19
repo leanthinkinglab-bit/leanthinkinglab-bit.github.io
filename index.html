@@ -20,132 +20,135 @@
         <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-green-500"></div>
     </div>
 
-    <div id="content" class="max-w-md mx-auto opacity-0 transition-opacity duration-500">
+    <div class="max-w-4xl mx-auto opacity-0 transition-opacity duration-500" id="main-content">
         <header class="text-center mb-6">
-            <h1 class="text-3xl font-bold text-green-400">김프매니저</h1>
-            <p class="text-gray-400 mt-1">가장 저렴한 코인 송금 경로 추천</p>
-            <p id="last-updated" class="text-xs text-gray-500 mt-2">&nbsp;</p>
-            <p class="text-xs text-green-400 mt-1">※ 데이터는 1분마다 자동 갱신됩니다.</p>
+            <h1 class="text-3xl sm:text-4xl font-bold text-green-400">김프매니저</h1>
+            <p class="text-gray-400 mt-2">가장 저렴한 코인 송금 경로를 찾아보세요</p>
+            <p id="timestamp" class="text-xs text-gray-500 mt-2"></p>
         </header>
-        <main id="main-content" class="space-y-4">
-            <!-- 카드 내용은 JavaScript로 채워집니다 -->
-        </main>
-        <footer class="text-center mt-8 text-xs text-gray-600">
-            <p>* 데이터 제공: Upbit, Binance, FloatRates</p>
-            <p class="mt-1">* 본 정보는 투자 참고용이며, 법적 책임을 지지 않습니다.</p>
-        </footer>
+
+        <div id="coin-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Coin cards will be injected here -->
+        </div>
+
     </div>
 
     <script>
-        const API_URL = "https://script.google.com/macros/s/AKfycbw8fFboXNvT5cAaeozhZVhaaBQHwWLMibAGV2fQeZdspZhdq7njEo1YulIVm24Vr80hSg/exec";
-        const COINS = [
-            { id: 'XRP', name: 'XRP (리플)' }, { id: 'TRX', name: 'TRX (트론)' },
-            { id: 'USDT', name: 'USDT (테더)' }, { id: 'USDC', name: 'USDC (서클)' }
-        ];
+        // [최종 수정] 새로운 웹 앱 URL로 교체
+        const gasUrl = 'https://script.google.com/macros/s/AKfycbyVotfFjwcAji9JV4p9tOzLycdC-seU2l943yP_tuDLx8fuLynf50ztRZQW1VNII3lILg/exec';
 
-        async function fetchDataAndUpdateUI() {
-            try {
-                const response = await fetch(API_URL);
-                if (!response.ok) throw new Error(`서버 응답 오류: ${response.status}`);
-                const result = await response.json();
+        document.addEventListener('DOMContentLoaded', fetchDataWithRetry);
 
-                if (result.realtime.status === 'success') {
-                    updateUI(result.realtime, result.historical || {});
-                } else if (result.realtime.status === 'preparing') {
-                    displaySpecialMessage(result.realtime.message, 'preparing');
-                } else {
-                    throw new Error(result.realtime.message || '백엔드에서 유효한 데이터를 받지 못했습니다.');
-                }
-            } catch (error) {
-                console.error("데이터 처리 중 오류 발생:", error);
-                displaySpecialMessage(error.message, 'error');
-            } finally {
-                hideLoader();
-            }
+        function fetchDataWithRetry(retries = 5, interval = 2000) {
+            fetch(gasUrl)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(result => {
+                    if (result.status === 'success') {
+                        updateUI(result);
+                    } else if (result.status === 'pending' && retries > 0) {
+                        console.log(`Data is pending. Retrying in ${interval / 1000}s... (${retries} retries left)`);
+                        setTimeout(() => fetchDataWithRetry(retries - 1, interval), interval);
+                        if (retries === 5) { // 첫 pending 응답 시에만 메시지 표시
+                           displaySpecialMessage(result.message, 'pending');
+                        }
+                    } else if (result.status === 'pending' && retries === 0) {
+                        throw new Error('데이터 준비 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.');
+                    } else {
+                        throw new Error(result.message || 'Unknown error from backend');
+                    }
+                })
+                .catch(error => {
+                    console.error("Fetch Error:", error);
+                    displaySpecialMessage(error.message, 'error');
+                });
         }
 
-        function updateUI(realtime, historical) {
-            document.getElementById('last-updated').textContent = `최종 업데이트: ${realtime.last_updated}`;
+        function updateUI(result) {
             const mainContent = document.getElementById('main-content');
-            
-            const coinData = Object.entries(realtime.data);
-            if (coinData.length === 0) {
-                displaySpecialMessage("수신된 코인 데이터가 없습니다.", 'error');
+            const loader = document.getElementById('loader');
+            const cardsContainer = document.getElementById('coin-cards');
+            const timestampEl = document.getElementById('timestamp');
+
+            if (!result.data || !result.data.premiums) {
+                displaySpecialMessage('수신된 데이터 형식이 올바르지 않습니다.', 'error');
                 return;
             }
 
-            const [bestCoinId, bestCoinData] = coinData.reduce((a, b) => parseFloat(a[1].premium) < parseFloat(b[1].premium) ? a : b);
+            const premiums = result.data.premiums;
+            const history = result.data.history || {};
+            
+            // 김프가 null이 아닌 유효한 데이터만 필터링하여 최소값 찾기
+            const validPremiums = premiums.filter(p => p.kimp !== null);
+            const minKimp = validPremiums.length > 0 ? Math.min(...validPremiums.map(p => p.kimp)) : -Infinity;
 
-            let contentHTML = generateRecommendationBoxHTML(bestCoinId, bestCoinData);
-            COINS.forEach(coin => {
-                const data = realtime.data[coin.id];
-                const history = historical[coin.id] || [];
-                const isRecommended = coin.id === bestCoinId;
-                contentHTML += generateCardHTML(coin, data, isRecommended, history);
-            });
-            mainContent.innerHTML = contentHTML;
+            cardsContainer.innerHTML = premiums.map(p => createCoinCard(p, p.kimp === minKimp, history[p.coin])).join('');
+            
+            const date = new Date(result.timestamp);
+            timestampEl.textContent = `마지막 업데이트: ${date.toLocaleString('ko-KR')}`;
+            
+            loader.style.display = 'none';
+            mainContent.classList.add('fade-in');
         }
 
-        function generateRecommendationBoxHTML(id, data) {
+        function createCoinCard(data, isRecommended, history = []) {
+            const kimpColor = data.kimp > 0 ? 'text-red-400' : 'text-blue-400';
+            const recommendedClass = isRecommended ? 'bg-green-800 bg-opacity-30 border-green-500 recommended-glow' : 'bg-gray-800 border-gray-700';
+            const errorClass = data.kimp === null ? 'opacity-50' : '';
+
             return `
-                <div class="bg-gray-800 rounded-lg p-4 text-center recommended-glow border-2 border-green-500">
-                    <p class="font-bold text-lg text-green-400">[추천 코인: ${id}]</p>
-                    <p class="text-sm text-gray-400 mt-1">
-                        현재 <span class="font-bold text-white">${id}</span>의 김치 프리미엄이 <span class="font-bold text-white">${data.premium}%</span>로 가장 낮아<br>자금 이체 시 가장 유리합니다.
-                    </p>
-                </div>`;
+                <div class="border ${recommendedClass} ${errorClass} p-4 rounded-lg transform hover:scale-105 transition-transform duration-300">
+                    <div class="flex items-center justify-between mb-2">
+                        <h2 class="text-xl font-bold">${data.coin}</h2>
+                        ${isRecommended && data.kimp !== null ? '<span class="text-xs bg-green-500 text-white font-bold px-2 py-1 rounded-full">추천</span>' : ''}
+                    </div>
+                    ${data.kimp !== null ? `
+                    <p class="text-3xl font-black ${kimpColor}">${data.kimp.toFixed(2)}%</p>
+                    <div class="text-xs text-gray-400 mt-3">
+                        <p>업비트: ${data.upbitPrice.toLocaleString()}원</p>
+                        <p>바이낸스: $${data.binancePrice.toFixed(4)}</p>
+                    </div>
+                    <div class="mt-4 h-10">
+                        ${history && history.length > 0 ? generateSparkline(history) : '<p class="text-xs text-gray-500">과거 데이터 없음</p>'}
+                    </div>
+                    ` : `
+                    <p class="text-lg font-bold text-gray-500">데이터 없음</p>
+                    <p class="text-xs text-gray-600 mt-1">${data.error || '시세 정보 수신 실패'}</p>
+                    <div class="mt-4 h-10"></div>
+                    `}
+                </div>
+            `;
         }
         
-        function generateCardHTML(coin, data, isRecommended, history) {
-            const cardState = isRecommended ? 'recommended-glow border-green-500' : 'border-gray-700';
-            let cardContent;
+        function generateSparkline(history) {
+            const values = history.map(h => h.value);
+            const max = Math.max(...values);
+            const min = Math.min(...values);
+            const range = max - min === 0 ? 1 : max - min;
+            
+            const points = values.map((v, i) => {
+                const x = (i / (values.length - 1)) * 100;
+                const y = 30 - ((v - min) / range) * 30; // SVG Y-좌표는 위에서 아래로 증가
+                return `${x},${y}`;
+            }).join(' ');
 
-            if (!data) {
-                cardContent = `<div class="text-center text-gray-500 p-4">데이터를 불러올 수 없습니다.</div>`;
-            } else {
-                const premium = parseFloat(data.premium);
-                const premiumColor = premium < 0 ? 'text-blue-400' : (premium > 1 ? 'text-red-400' : 'text-white');
-                const premiumSign = premium > 0 ? '+' : '';
-                cardContent = `
-                    <div class="flex justify-between items-center mb-3">
-                        <h2 class="text-xl font-bold">${coin.name}</h2>
-                        <p class="text-3xl font-black ${premiumColor}">${premiumSign}${data.premium}%</p>
-                    </div>
-                    <div class="w-full h-24 my-2">${generateChartSVG(history)}</div>
-                    <div class="text-xs text-gray-400 flex justify-between pt-3 border-t border-gray-700">
-                        <span>업비트: <span class="font-semibold text-white">${(data.upbit_price || 0).toLocaleString()} KRW</span></span>
-                        <span>바이낸스: <span class="font-semibold text-white">${(data.binance_price || 0).toFixed(4)} USD</span></span>
-                    </div>`;
-            }
-            return `<div class="bg-gray-800 rounded-lg p-5 border-2 ${cardState}">${cardContent}</div>`;
-        }
-
-        function generateChartSVG(history) {
-            if (!history || history.length < 2) return `<div class="w-full h-full flex items-center justify-center text-gray-600 text-sm">기간 데이터 부족</div>`;
-            const values = history.map(h => h.value); const min = Math.min(...values); const max = Math.max(...values);
-            const yMax = Math.ceil(max / 2) * 2; const yMin = Math.floor(min / 2) * 2; const yRange = yMax - yMin === 0 ? 1 : yMax - yMin;
-            const points = history.map((h, i) => `${(i / (history.length - 1)) * 100},${30 - ((h.value - yMin) / yRange) * 30}`).join(' ');
-            return `<svg class="w-full h-full" viewBox="-25 -5 130 45" preserveAspectRatio="none"><text x="-5" y="0" dominant-baseline="middle" text-anchor="end" class="text-[10px]" fill="#6b7280">${yMax.toFixed(1)}%</text><text x="-5" y="15" dominant-baseline="middle" text-anchor="end" class="text-[10px]" fill="#6b7280">${((yMax + yMin) / 2).toFixed(1)}%</text><text x="-5" y="30" dominant-baseline="middle" text-anchor="end" class="text-[10px]" fill="#6b7280">${yMin.toFixed(1)}%</text><line x1="0" y1="0" x2="100" y2="0" stroke="#374151" stroke-width="0.5"/><line x1="0" y1="15" x2="100" y2="15" stroke="#374151" stroke-width="0.5"/><line x1="0" y1="30" x2="100" y2="30" stroke="#374151" stroke-width="0.5"/><polyline points="${points}" stroke="#4A5568" stroke-width="2" fill="none"/><text x="0" y="40" dominant-baseline="hanging" text-anchor="start" class="text-[10px]" fill="#6b7280">${history[0].date}</text><text x="100" y="40" dominant-baseline="hanging" text-anchor="end" class="text-[10px]" fill="#6b7280">현재</text></svg>`;
+            return `<svg viewBox="0 0 100 45" class="w-full h-full"><line x1="0" y1="0" x2="100" y2="0" stroke="#374151" stroke-width="0.5"/><line x1="0" y1="15" x2="100" y2="15" stroke="#374151" stroke-width="0.5"/><line x1="0" y1="30" x2="100" y2="30" stroke="#374151" stroke-width="0.5"/><polyline points="${points}" stroke="#4A5568" stroke-width="2" fill="none"/><text x="0" y="40" dominant-baseline="hanging" text-anchor="start" class="text-[10px]" fill="#6b7280">${history[0].date}</text><text x="100" y="40" dominant-baseline="hanging" text-anchor="end" class="text-[10px]" fill="#6b7280">현재</text></svg>`;
         }
         
         function displaySpecialMessage(message, type) {
             const mainContent = document.getElementById('main-content');
+            const loader = document.getElementById('loader');
             const color = type === 'error' ? 'text-red-400 bg-red-900' : 'text-blue-400 bg-blue-900';
             const title = type === 'error' ? '데이터 로딩 실패' : '데이터 준비 중';
             mainContent.innerHTML = `<div class="text-center ${color} bg-opacity-30 p-4 rounded-lg"><h3 class="font-bold">${title}</h3><p class="text-sm mt-1">${message}</p></div>`;
+            loader.style.display = 'none';
+            mainContent.classList.add('fade-in');
         }
 
-        function hideLoader() {
-            const loader = document.getElementById('loader');
-            if (loader) loader.style.display = 'none';
-            document.getElementById('content').classList.add('fade-in');
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            fetchDataAndUpdateUI();
-            setInterval(fetchDataAndUpdateUI, 60000);
-        });
     </script>
 </body>
 </html>
-
