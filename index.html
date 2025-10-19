@@ -20,11 +20,11 @@
         <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-green-500"></div>
     </div>
 
-    <div id="content" class="max-w-4xl mx-auto opacity-0 transition-opacity duration-500">
+    <div class="max-w-4xl mx-auto opacity-0 transition-opacity duration-500" id="main-content">
         <header class="text-center mb-6">
             <h1 class="text-3xl sm:text-4xl font-bold text-green-400">김프매니저</h1>
             <p class="text-gray-400 mt-2">가장 저렴한 코인 송금 경로를 찾아보세요</p>
-            <p class="text-xs text-green-400 mt-1">김치 프리미엄은 1분 마다 업데이트 됩니다.</p>
+            <!-- 업데이트 시간 및 새로고침 버튼 컨테이너 수정 -->
             <div id="update-container" class="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 mt-4 mb-8">
                 <p id="timestamp" class="text-sm text-gray-400 order-2 sm:order-1"></p>
                 <button id="refresh-btn" class="order-1 sm:order-2 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center space-x-2 transition-colors duration-300">
@@ -43,25 +43,12 @@
         <div id="coin-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <!-- Coin cards will be injected here -->
         </div>
-        
-        <footer class="text-center mt-8 text-xs text-gray-600 space-y-2">
-            <p class="font-bold text-red-500">※ 투자 유의사항 ※</p>
-            <p>모든 투자의 책임은 본인에게 있으며, 김프매니저는 어떠한 경우에도 투자 결과에 대한 법적 책임을 지지 않습니다.</p>
-            <p class="pt-2">* 데이터 제공: Upbit, CryptoCompare</p>
-        </footer>
 
     </div>
 
     <script>
-        const gasUrl = 'https://script.google.com/macros/s/AKfycby_3v8nUoM3a-sQh-t-v__xS1GVo_9a_xkD5_e-04__-2Qe-Z8B-tq0Cg_ZkXz-7Q_g/exec';
-        const COINS = [
-            { id: 'XRP', name: 'XRP (리플)', logo: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25662/svg/color/xrp.svg' },
-            { id: 'TRX', name: 'TRX (트론)', logo: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25662/svg/color/trx.svg' },
-            { id: 'USDT', name: 'USDT (테더)', logo: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25662/svg/color/usdt.svg' },
-            { id: 'USDC', name: 'USDC (서클)', logo: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25662/svg/color/usdc.svg' }
-        ];
-        let timeUpdateInterval;
-        let lastUpdateTime;
+        const gasUrl = 'https://script.google.com/macros/s/AKfycbyVotfFjwcAji9JV4p9tOzLycdC-seU2l943yP_tuDLx8fuLynf50ztRZQW1VNII3lILg/exec';
+        let timeUpdateInterval; // 동적 시간 표시를 위한 전역 변수
 
         document.addEventListener('DOMContentLoaded', () => {
             fetchDataWithRetry();
@@ -71,13 +58,13 @@
 
         function handleRefresh() {
             const loader = document.getElementById('loader');
-            const mainContent = document.getElementById('content');
+            const mainContent = document.getElementById('main-content');
             const timestampEl = document.getElementById('timestamp');
             
             loader.style.display = 'flex';
             mainContent.classList.remove('fade-in');
             timestampEl.textContent = '업데이트 중...';
-            if (timeUpdateInterval) clearInterval(timeUpdateInterval);
+            if (timeUpdateInterval) clearInterval(timeUpdateInterval); // 기존 타이머 제거
             
             fetchDataWithRetry();
         }
@@ -112,7 +99,7 @@
         }
 
         function updateUI(result) {
-            const mainContent = document.getElementById('content');
+            const mainContent = document.getElementById('main-content');
             const loader = document.getElementById('loader');
             const cardsContainer = document.getElementById('coin-cards');
             const recommendationContainer = document.getElementById('recommendation-box');
@@ -124,6 +111,7 @@
             }
 
             const premiums = result.data.premiums;
+            const history = result.data.history || {};
             
             const validPremiums = premiums.filter(p => p.kimp !== null);
             const minKimp = validPremiums.length > 0 ? Math.min(...validPremiums.map(p => p.kimp)) : -Infinity;
@@ -135,40 +123,36 @@
                 recommendationContainer.innerHTML = '';
             }
             
-            cardsContainer.innerHTML = COINS.map(coinInfo => {
-                const data = premiums.find(p => p.coin === coinInfo.id);
-                return createCoinCard(coinInfo, data, data && data.kimp === minKimp);
-            }).join('');
+            cardsContainer.innerHTML = premiums.map(p => createCoinCard(p, p.kimp === minKimp, history[p.coin])).join('');
             
-            lastUpdateTime = new Date(result.timestamp);
-            if (timeUpdateInterval) clearInterval(timeUpdateInterval);
+            // --- 동적 시간 표시 로직 ---
+            const updateTime = new Date(result.timestamp);
+            if (timeUpdateInterval) clearInterval(timeUpdateInterval); // 이전 인터벌 제거
 
             const updateTimestampText = () => {
                 const now = new Date();
-                const secondsPast = Math.round((now - lastUpdateTime) / 1000);
+                const secondsPast = Math.round((now - updateTime) / 1000);
                 if (secondsPast < 5) {
                     timestampEl.textContent = '방금 전 업데이트';
                 } else if (secondsPast < 60) {
                     timestampEl.textContent = `${secondsPast}초 전에 업데이트됨`;
                 } else {
-                    timestampEl.textContent = `${Math.floor(secondsPast / 60)}분 전에 업데이트됨`;
-                }
-                if (secondsPast >= 60) {
-                    handleRefresh();
+                    const minutesPast = Math.floor(secondsPast / 60);
+                    timestampEl.textContent = `${minutesPast}분 전에 업데이트됨`;
                 }
             };
-            updateTimestampText();
-            timeUpdateInterval = setInterval(updateTimestampText, 1000);
+            updateTimestampText(); // 즉시 한번 실행
+            timeUpdateInterval = setInterval(updateTimestampText, 5000); // 5초마다 업데이트
+            // -------------------------
             
             loader.style.display = 'none';
             mainContent.classList.add('fade-in');
         }
         
         function createRecommendationBox(data) {
-            const coinInfo = COINS.find(c => c.id === data.coin);
             return `
                 <div class="bg-gray-800 rounded-lg p-4 text-center border-2 border-green-500 recommended-glow">
-                    <p class="font-bold text-lg text-green-400">[추천 코인: ${coinInfo.name}]</p>
+                    <p class="font-bold text-lg text-green-400">[추천 코인: ${data.coin}]</p>
                     <p class="text-sm text-gray-300 mt-2">
                         현재 <span class="font-bold text-white">${data.coin}</span>의 김치 프리미엄이 <span class="font-bold text-white">${data.kimp.toFixed(2)}%</span>로 가장 낮아<br>자금 이체 시 가장 유리합니다.
                     </p>
@@ -176,44 +160,58 @@
             `;
         }
 
-        function createCoinCard(coinInfo, data, isRecommended) {
-            const kimpColor = data && data.kimp > 0 ? 'text-red-400' : 'text-blue-400';
+        function createCoinCard(data, isRecommended, history = []) {
+            const kimpColor = data.kimp > 0 ? 'text-red-400' : 'text-blue-400';
             const recommendedClass = 'bg-gray-800 border-gray-700';
-            const errorClass = !data || data.kimp === null ? 'opacity-50' : '';
+            const errorClass = data.kimp === null ? 'opacity-50' : '';
             const finalCardClass = isRecommended ? `border-2 border-green-600 ${recommendedClass}` : `border ${recommendedClass}`;
 
             return `
                 <div class="${finalCardClass} ${errorClass} p-4 rounded-lg transform hover:scale-105 transition-transform duration-300">
                     <div class="flex items-center justify-between mb-2">
-                        <h2 class="text-xl font-bold">${coinInfo.name}</h2>
-                        <img src="${coinInfo.logo}" alt="${coinInfo.name} logo" class="w-8 h-8"/>
+                        <h2 class="text-xl font-bold">${data.coin}</h2>
+                        ${isRecommended && data.kimp !== null ? '<span class="text-xs bg-green-500 text-white font-bold px-2 py-1 rounded-full">추천</span>' : ''}
                     </div>
-                    ${data && data.kimp !== null ? `
+                    ${data.kimp !== null ? `
                     <p class="text-3xl font-black ${kimpColor}">${data.kimp.toFixed(2)}%</p>
                     <div class="text-xs text-gray-400 mt-3">
                         <p>업비트: ${data.upbitPrice.toLocaleString()}원</p>
-                        <p>해외: $${data.binancePrice.toFixed(4)}</p>
+                        <p>바이낸스: $${data.binancePrice.toFixed(4)}</p>
+                    </div>
+                    <div class="mt-4 h-10">
+                        ${history && history.length > 0 ? generateSparkline(history) : '<p class="text-xs text-gray-500">과거 데이터 없음</p>'}
                     </div>
                     ` : `
                     <p class="text-lg font-bold text-gray-500">데이터 없음</p>
-                    <p class="text-xs text-gray-600 mt-1">${data ? data.error : '시세 정보 수신 실패'}</p>
+                    <p class="text-xs text-gray-600 mt-1">${data.error || '시세 정보 수신 실패'}</p>
+                    <div class="mt-4 h-10"></div>
                     `}
                 </div>
             `;
         }
         
+        function generateSparkline(history) {
+            const values = history.map(h => h.value);
+            const max = Math.max(...values);
+            const min = Math.min(...values);
+            const range = max - min === 0 ? 1 : max - min;
+            
+            const points = values.map((v, i) => {
+                const x = (i / (values.length - 1)) * 100;
+                const y = 30 - ((v - min) / range) * 30;
+                return `${x},${y}`;
+            }).join(' ');
+
+            return `<svg viewBox="0 0 100 45" class="w-full h-full"><line x1="0" y1="0" x2="100" y2="0" stroke="#374151" stroke-width="0.5"/><line x1="0" y1="15" x2="100" y2="15" stroke="#374151" stroke-width="0.5"/><line x1="0" y1="30" x2="100" y2="30" stroke="#374151" stroke-width="0.5"/><polyline points="${points}" stroke="#4A5568" stroke-width="2" fill="none"/><text x="0" y="40" dominant-baseline="hanging" text-anchor="start" class="text-[10px]" fill="#6b7280">${history[0].date}</text><text x="100" y="40" dominant-baseline="hanging" text-anchor="end" class="text-[10px]" fill="#6b7280">현재</text></svg>`;
+        }
+        
         function displaySpecialMessage(message, type) {
-            const mainContent = document.getElementById('content');
+            const mainContent = document.getElementById('main-content');
             const loader = document.getElementById('loader');
             const color = type === 'error' ? 'text-red-400 bg-red-900' : 'text-blue-400 bg-blue-900';
             const title = type === 'error' ? '데이터 로딩 실패' : '데이터 준비 중';
             document.getElementById('recommendation-box').innerHTML = '';
-            document.getElementById('coin-cards').innerHTML = '';
-            mainContent.querySelector('#update-container').style.display = 'none'; // Hide refresh button on error
-            
-            const messageBox = `<div class="text-center ${color} bg-opacity-30 p-4 rounded-lg"><h3 class="font-bold">${title}</h3><p class="text-sm mt-1">${message}</p></div>`;
-            document.getElementById('coin-cards').innerHTML = messageBox;
-
+            mainContent.innerHTML = `<div class="text-center ${color} bg-opacity-30 p-4 rounded-lg"><h3 class="font-bold">${title}</h3><p class="text-sm mt-1">${message}</p></div>`;
             loader.style.display = 'none';
             mainContent.classList.add('fade-in');
         }
@@ -221,4 +219,3 @@
     </script>
 </body>
 </html>
-
