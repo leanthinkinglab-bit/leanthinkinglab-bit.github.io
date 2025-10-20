@@ -32,10 +32,12 @@
                 <p id="exchange-rate" class="text-sm text-gray-500 mt-1"></p>
             </div>
             
-            <!-- ✨ Vibe-Up: 이제 이 섹션은 실제 데이터로 채워집니다! -->
-            <div id="hot-coin-yesterday" class="text-center text-sm text-yellow-400 mb-6 hidden">
-                 <!-- 데이터는 JS에서 채워집니다 -->
+            <!-- ✨ Vibe-Up: 뜨겁고 차가운 코인 섹션! -->
+            <div id="yesterday-summary" class="space-y-2 mb-6">
+                <div id="hot-coin-yesterday" class="text-center text-sm text-yellow-400 hidden"></div>
+                <div id="cold-coin-yesterday" class="text-center text-sm text-sky-400 hidden"></div>
             </div>
+
         </header>
 
         <div id="recommendation-box" class="mb-6">
@@ -115,6 +117,7 @@
             const recommendationContainer = document.getElementById('recommendation-box');
             const exchangeRateEl = document.getElementById('exchange-rate');
             const hotCoinEl = document.getElementById('hot-coin-yesterday');
+            const coldCoinEl = document.getElementById('cold-coin-yesterday');
             
             if (!result.data || !result.data.premiums) {
                 displaySpecialMessage('수신된 데이터 형식이 올바르지 않습니다.', 'error');
@@ -136,13 +139,20 @@
             cardsContainer.innerHTML = premiums.map(p => createCoinCard(p, p.kimp === minKimp)).join('');
             
             // --- 수정된 부분 시작 ---
-            // 백엔드에서 받은 실제 '어제의 핫 코인' 데이터로 UI를 업데이트합니다.
             const hottestCoin = result.data.yesterdaysHottestCoin;
-            if (hottestCoin && hottestCoin.name && hottestCoin.value) {
-                hotCoinEl.innerHTML = `<span>🔥 어제 가장 뜨거웠던 코인: <strong>${hottestCoin.name} (+${hottestCoin.value.toFixed(2)}%)</strong></span>`;
+            if (hottestCoin && hottestCoin.name && hottestCoin.value !== null) {
+                hotCoinEl.innerHTML = `<span>🔥 어제 가장 뜨거웠던 김프 코인: <strong>${hottestCoin.name} (+${hottestCoin.value.toFixed(2)}%)</strong></span>`;
                 hotCoinEl.classList.remove('hidden');
             } else {
-                hotCoinEl.classList.add('hidden'); // 데이터가 없으면 숨깁니다.
+                hotCoinEl.classList.add('hidden');
+            }
+
+            const coldestCoin = result.data.yesterdaysColdestCoin;
+            if (coldestCoin && coldestCoin.name && coldestCoin.value !== null) {
+                coldCoinEl.innerHTML = `<span>❄️ 어제 가장 차가웠던 김프 코인: <strong>${coldestCoin.name} (${coldestCoin.value.toFixed(2)}%)</strong></span>`;
+                coldCoinEl.classList.remove('hidden');
+            } else {
+                coldCoinEl.classList.add('hidden');
             }
             // --- 수정된 부분 끝 ---
 
@@ -155,35 +165,26 @@
         }
         
         function setupDynamicTimestamp(isoTimestamp) {
+            // This function remains unchanged.
             const timestampEl = document.getElementById('timestamp');
             const updateTime = new Date(isoTimestamp);
-
             if (timeUpdateInterval) clearInterval(timeUpdateInterval);
             if (autoRefreshTimer) clearTimeout(autoRefreshTimer);
-
             const update = () => {
                 const now = new Date();
                 const secondsPast = Math.round((now - updateTime) / 1000);
-                
                 if (secondsPast < 5) timestampEl.textContent = '방금 전 업데이트';
                 else if (secondsPast < 60) timestampEl.textContent = `${secondsPast}초 전에 업데이트됨`;
-                else {
-                    const minutesPast = Math.floor(secondsPast / 60);
-                    timestampEl.textContent = `${minutesPast}분 전에 업데이트됨`;
-                }
+                else timestampEl.textContent = `${Math.floor(secondsPast / 60)}분 전에 업데이트됨`;
             };
-            
             update();
             timeUpdateInterval = setInterval(update, 5000);
-            
             const secondsUntilAutoRefresh = 65 - Math.round((new Date() - updateTime) / 1000);
-            autoRefreshTimer = setTimeout(() => {
-                console.log("Auto-refreshing data...");
-                handleRefresh();
-            }, Math.max(secondsUntilAutoRefresh, 0) * 1000);
+            autoRefreshTimer = setTimeout(handleRefresh, Math.max(secondsUntilAutoRefresh, 0) * 1000);
         }
 
         function createRecommendationBox(data) {
+            // This function remains unchanged.
             return `
                 <div class="bg-gray-800 rounded-lg p-4 text-center border-2 border-green-500 recommended-glow">
                     <p class="font-bold text-lg text-green-400">[추천 코인: ${data.coin}]</p>
@@ -195,11 +196,11 @@
         }
 
         function createCoinCard(data, isRecommended) {
+            // This function remains unchanged.
             const kimpColor = data.kimp > 0 ? 'text-red-400' : 'text-blue-400';
             const errorClass = data.kimp === null ? 'opacity-50' : '';
             const finalCardClass = isRecommended ? 'border-2 border-green-600 bg-gray-800' : 'border border-gray-700 bg-gray-800';
             const logoUrl = coinLogos[data.coin] || '';
-
             return `
                 <div class="${finalCardClass} ${errorClass} p-4 rounded-lg flex flex-col justify-between transform hover:scale-105 transition-transform duration-300">
                     <div>
@@ -210,7 +211,6 @@
                             </div>
                             <img src="${logoUrl}" alt="${data.coin} 로고" class="w-10 h-10 rounded-full border-2 border-gray-700">
                         </div>
-                        
                         ${data.kimp !== null ? `
                         <p class="text-3xl font-black ${kimpColor}">${data.kimp.toFixed(2)}%</p>
                         <div class="text-xs text-gray-400 mt-3">
@@ -221,9 +221,7 @@
                         <p class="text-xs text-gray-600 mt-1">${data.error || '시세 정보 수신 실패'}</p>
                         `}
                     </div>
-                    <div class="mt-4 h-24 relative">
-                         <canvas id="chart-${data.coin}"></canvas>
-                    </div>
+                    <div class="mt-4 h-24 relative"><canvas id="chart-${data.coin}"></canvas></div>
                 </div>
             `;
         }
@@ -235,38 +233,34 @@
             const title = type === 'error' ? '데이터 로딩 실패' : '데이터 준비 중';
             document.getElementById('recommendation-box').innerHTML = '';
             document.getElementById('hot-coin-yesterday').classList.add('hidden');
+            document.getElementById('cold-coin-yesterday').classList.add('hidden'); // 차가운 코인 섹션도 숨김 처리
             mainContent.innerHTML = `<div class="text-center ${color} bg-opacity-30 p-4 rounded-lg"><h3 class="font-bold">${title}</h3><p class="text-sm mt-1">${message}</p></div>`;
             loader.style.display = 'none';
             mainContent.classList.add('fade-in');
         }
         
         function renderAllCharts(premiums) {
+            // This function remains unchanged.
             premiums.forEach(p => {
                 const canvasId = `chart-${p.coin}`;
                 const canvas = document.getElementById(canvasId);
                 if (canvas && p.kimp !== null) {
                     const historicalData = p.historicalData || [];
                     const fullData = [...historicalData, p.kimp]; 
-                    
                     const daysToShow = 7;
                     const chartData = Array(daysToShow).fill(null);
-                    
                     const startIndex = Math.max(0, daysToShow - fullData.length);
                     for (let i = 0; i < fullData.length; i++) {
-                        if (startIndex + i < daysToShow) {
-                           chartData[startIndex + i] = fullData[i];
-                        }
+                        if (startIndex + i < daysToShow) chartData[startIndex + i] = fullData[i];
                     }
-                    
-                    if (charts[canvasId]) {
-                        charts[canvasId].destroy();
-                    }
+                    if (charts[canvasId]) charts[canvasId].destroy();
                     charts[canvasId] = createChart(canvas, chartData);
                 }
             });
         }
         
         function createChart(canvas, data) {
+            // This function remains unchanged.
             const ctx = canvas.getContext('2d');
             const days = 7;
             const labels = Array.from({ length: days }, (_, i) => {
@@ -274,14 +268,12 @@
                 if (day === 0) return '오늘';
                 return `D-${day}`;
             });
-
             const validData = data.filter(d => d !== null);
             let yAxisOptions = {
                 beginAtZero: false, 
                 ticks: { color: '#9CA3AF', font: { size: 10 }, callback: value => value.toFixed(1) + '%' },
                 grid: { color: 'rgba(255, 255, 255, 0.1)' }
             };
-
             if (validData.length >= 2) {
                 const dataMin = Math.min(...validData);
                 const dataMax = Math.max(...validData);
@@ -290,34 +282,23 @@
                 yAxisOptions.min = dataMin - padding;
                 yAxisOptions.max = dataMax + padding;
             }
-
             return new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: labels,
                     datasets: [{
-                        label: '일일 최고 김프 (%)',
-                        data: data,
-                        borderColor: 'rgba(34, 197, 94, 0.8)',
-                        backgroundColor: 'rgba(34, 197, 94, 0.1)',
-                        borderWidth: 2,
-                        pointBackgroundColor: 'rgba(255, 255, 255, 1)',
-                        pointBorderColor: 'rgba(34, 197, 94, 1)',
-                        pointRadius: 3,
-                        pointHitRadius: 10,
-                        tension: 0.3,
-                        fill: true,
+                        label: '일일 최고 김프 (%)', data: data, borderColor: 'rgba(34, 197, 94, 0.8)',
+                        backgroundColor: 'rgba(34, 197, 94, 0.1)', borderWidth: 2,
+                        pointBackgroundColor: 'rgba(255, 255, 255, 1)', pointBorderColor: 'rgba(34, 197, 94, 1)',
+                        pointRadius: 3, pointHitRadius: 10, tension: 0.3, fill: true,
                     }]
                 },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
+                    responsive: true, maintainAspectRatio: false,
                     plugins: {
                         legend: { display: false },
                         tooltip: { enabled: true, mode: 'index', intersect: false,
-                            callbacks: {
-                                label: context => context.parsed.y !== null ? `김프: ${context.parsed.y.toFixed(2)}%` : null
-                            }
+                            callbacks: { label: context => context.parsed.y !== null ? `김프: ${context.parsed.y.toFixed(2)}%` : null }
                         }
                     },
                     scales: {
