@@ -138,7 +138,6 @@
             recommendationContainer.innerHTML = recommendedCoin ? createRecommendationBox(recommendedCoin) : '';
             cardsContainer.innerHTML = premiums.map(p => createCoinCard(p, p.kimp === minKimp)).join('');
             
-            // --- 수정된 부분 시작 ---
             const hottestCoin = result.data.yesterdaysHottestCoin;
             if (hottestCoin && hottestCoin.name && hottestCoin.value !== null) {
                 hotCoinEl.innerHTML = `<span>🔥 어제 가장 뜨거웠던 김프 코인: <strong>${hottestCoin.name} (+${hottestCoin.value.toFixed(2)}%)</strong></span>`;
@@ -149,12 +148,14 @@
 
             const coldestCoin = result.data.yesterdaysColdestCoin;
             if (coldestCoin && coldestCoin.name && coldestCoin.value !== null) {
-                coldCoinEl.innerHTML = `<span>❄️ 어제 가장 차가웠던 김프 코인: <strong>${coldestCoin.name} (${coldestCoin.value.toFixed(2)}%)</strong></span>`;
+                // --- 수정된 부분 시작 ---
+                const sign = coldestCoin.value > 0 ? '+' : ''; // 값이 양수일 때 '+' 기호를 붙여주는 로직 추가
+                coldCoinEl.innerHTML = `<span>❄️ 어제 가장 차가웠던 김프 코인: <strong>${coldestCoin.name} (${sign}${coldestCoin.value.toFixed(2)}%)</strong></span>`;
+                // --- 수정된 부분 끝 ---
                 coldCoinEl.classList.remove('hidden');
             } else {
                 coldCoinEl.classList.add('hidden');
             }
-            // --- 수정된 부분 끝 ---
 
             renderAllCharts(premiums);
 
