@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>김프매니저 - 가장 저렴한 코인 송금 경로</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Chart.js CDN 추가 -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -32,6 +31,11 @@
                 <p id="timestamp" class="text-sm text-gray-400"></p>
                 <p id="exchange-rate" class="text-sm text-gray-500 mt-1"></p>
             </div>
+            
+            <!-- ✨ Vibe-Up: 이제 이 섹션은 실제 데이터로 채워집니다! -->
+            <div id="hot-coin-yesterday" class="text-center text-sm text-yellow-400 mb-6 hidden">
+                 <!-- 데이터는 JS에서 채워집니다 -->
+            </div>
         </header>
 
         <div id="recommendation-box" class="mb-6">
@@ -53,8 +57,15 @@
         const gasUrl = 'https://script.google.com/macros/s/AKfycbyVotfFjwcAji9JV4p9tOzLycdC-seU2l943yP_tuDLx8fuLynf50ztRZQW1VNII3lILg/exec';
         let timeUpdateInterval;
         let autoRefreshTimer;
-        // 차트 인스턴스를 관리하기 위한 객체
         let charts = {};
+
+        const wittyPendingMessages = [
+            "거래소들의 비밀 정보를 캐내는 중...🕵️",
+            "가장 저렴한 김프 경로를 탐색하고 있어요 🗺️",
+            "차트 장인에게 7일치 그래프를 그려달라고 요청했어요! 🎨",
+            "잠시만요! 우주 최저가 코인을 찾고 있습니다 🚀",
+            "데이터를 빛의 속도로 가져오는 중...⚡"
+        ];
 
         const coinLogos = {
             'XRP': 'https://s2.coinmarketcap.com/static/img/coins/64x64/52.png',
@@ -82,7 +93,8 @@
                     } else if (result.status === 'pending' && retries > 0) {
                         setTimeout(() => fetchDataWithRetry(retries - 1, interval), interval);
                         if (retries === 5) {
-                           displaySpecialMessage(result.message, 'pending');
+                           const randomMessage = wittyPendingMessages[Math.floor(Math.random() * wittyPendingMessages.length)];
+                           displaySpecialMessage(randomMessage, 'pending');
                         }
                     } else if (result.status === 'pending' && retries === 0) {
                         throw new Error('데이터 준비 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.');
@@ -102,6 +114,7 @@
             const cardsContainer = document.getElementById('coin-cards');
             const recommendationContainer = document.getElementById('recommendation-box');
             const exchangeRateEl = document.getElementById('exchange-rate');
+            const hotCoinEl = document.getElementById('hot-coin-yesterday');
             
             if (!result.data || !result.data.premiums) {
                 displaySpecialMessage('수신된 데이터 형식이 올바르지 않습니다.', 'error');
@@ -122,7 +135,17 @@
             recommendationContainer.innerHTML = recommendedCoin ? createRecommendationBox(recommendedCoin) : '';
             cardsContainer.innerHTML = premiums.map(p => createCoinCard(p, p.kimp === minKimp)).join('');
             
-            // UI가 렌더링 된 후 차트를 그립니다.
+            // --- 수정된 부분 시작 ---
+            // 백엔드에서 받은 실제 '어제의 핫 코인' 데이터로 UI를 업데이트합니다.
+            const hottestCoin = result.data.yesterdaysHottestCoin;
+            if (hottestCoin && hottestCoin.name && hottestCoin.value) {
+                hotCoinEl.innerHTML = `<span>🔥 어제 가장 뜨거웠던 코인: <strong>${hottestCoin.name} (+${hottestCoin.value.toFixed(2)}%)</strong></span>`;
+                hotCoinEl.classList.remove('hidden');
+            } else {
+                hotCoinEl.classList.add('hidden'); // 데이터가 없으면 숨깁니다.
+            }
+            // --- 수정된 부분 끝 ---
+
             renderAllCharts(premiums);
 
             setupDynamicTimestamp(result.timestamp);
@@ -198,7 +221,6 @@
                         <p class="text-xs text-gray-600 mt-1">${data.error || '시세 정보 수신 실패'}</p>
                         `}
                     </div>
-                    <!-- 차트가 그려질 Canvas 요소 -->
                     <div class="mt-4 h-24 relative">
                          <canvas id="chart-${data.coin}"></canvas>
                     </div>
@@ -212,35 +234,29 @@
             const color = type === 'error' ? 'text-red-400 bg-red-900' : 'text-blue-400 bg-blue-900';
             const title = type === 'error' ? '데이터 로딩 실패' : '데이터 준비 중';
             document.getElementById('recommendation-box').innerHTML = '';
+            document.getElementById('hot-coin-yesterday').classList.add('hidden');
             mainContent.innerHTML = `<div class="text-center ${color} bg-opacity-30 p-4 rounded-lg"><h3 class="font-bold">${title}</h3><p class="text-sm mt-1">${message}</p></div>`;
             loader.style.display = 'none';
             mainContent.classList.add('fade-in');
         }
-
-        // --- 차트 관련 함수들 ---
         
         function renderAllCharts(premiums) {
             premiums.forEach(p => {
                 const canvasId = `chart-${p.coin}`;
                 const canvas = document.getElementById(canvasId);
-                if (canvas) {
-                    if (p.kimp === null) return;
-
-                    // TODO: 백엔드 응답에 p.historicalData = [6일전, 5일전, ..., 어제] 형식으로 데이터가 포함되어야 합니다.
-                    const historicalData = p.historicalData || []; // 현재는 백엔드에서 데이터가 오지 않으므로 빈 배열입니다.
-                    
-                    // 현재 김프 값을 데이터셋의 마지막에 추가합니다.
+                if (canvas && p.kimp !== null) {
+                    const historicalData = p.historicalData || [];
                     const fullData = [...historicalData, p.kimp]; 
                     
                     const daysToShow = 7;
-                    // 7일치 배열을 만들고, 앞부분을 null로 채웁니다.
                     const chartData = Array(daysToShow).fill(null);
                     
-                    const startIndex = daysToShow - fullData.length;
+                    const startIndex = Math.max(0, daysToShow - fullData.length);
                     for (let i = 0; i < fullData.length; i++) {
-                        chartData[startIndex + i] = fullData[i];
+                        if (startIndex + i < daysToShow) {
+                           chartData[startIndex + i] = fullData[i];
+                        }
                     }
-                    // 현재 historicalData가 없으므로, chartData는 [null, null, null, null, null, null, p.kimp]가 됩니다.
                     
                     if (charts[canvasId]) {
                         charts[canvasId].destroy();
@@ -250,15 +266,8 @@
             });
         }
         
-        /**
-         * Chart.js를 사용하여 꺾은선 그래프를 생성합니다.
-         * @param {HTMLCanvasElement} canvas - 차트를 그릴 canvas 요소
-         * @param {number[]} data - 그래프에 표시할 7일치 데이터 배열 (값이 없으면 null)
-         */
         function createChart(canvas, data) {
             const ctx = canvas.getContext('2d');
-            
-            // X축은 항상 7일 기준으로 라벨을 생성합니다.
             const days = 7;
             const labels = Array.from({ length: days }, (_, i) => {
                 const day = days - 1 - i;
@@ -266,31 +275,21 @@
                 return `D-${day}`;
             });
 
-            // --- Y축 스케일 자동 조절 로직 ---
             const validData = data.filter(d => d !== null);
             let yAxisOptions = {
                 beginAtZero: false, 
-                ticks: {
-                    color: '#9CA3AF',
-                    font: { size: 10 },
-                    callback: function(value) { return value.toFixed(1) + '%'; } // Y축 라벨 소수점 한자리로 통일
-                },
+                ticks: { color: '#9CA3AF', font: { size: 10 }, callback: value => value.toFixed(1) + '%' },
                 grid: { color: 'rgba(255, 255, 255, 0.1)' }
             };
 
-            // 데이터가 2개 이상 있을 때만 Y축 범위를 동적으로 조절합니다.
             if (validData.length >= 2) {
                 const dataMin = Math.min(...validData);
                 const dataMax = Math.max(...validData);
                 const range = dataMax - dataMin;
-                
-                // 데이터 간 차이가 거의 없을 때(0.5% 미만)를 대비한 최소 여백(padding)을 보장합니다.
                 const padding = Math.max(range * 0.2, 0.5); 
-
                 yAxisOptions.min = dataMin - padding;
                 yAxisOptions.max = dataMax + padding;
             }
-            // --- 로직 끝 ---
 
             return new Chart(ctx, {
                 type: 'line',
@@ -299,14 +298,14 @@
                     datasets: [{
                         label: '일일 최고 김프 (%)',
                         data: data,
-                        borderColor: 'rgba(34, 197, 94, 0.8)', // Green
+                        borderColor: 'rgba(34, 197, 94, 0.8)',
                         backgroundColor: 'rgba(34, 197, 94, 0.1)',
                         borderWidth: 2,
                         pointBackgroundColor: 'rgba(255, 255, 255, 1)',
                         pointBorderColor: 'rgba(34, 197, 94, 1)',
                         pointRadius: 3,
                         pointHitRadius: 10,
-                        tension: 0.3, // 라인을 부드럽게
+                        tension: 0.3,
                         fill: true,
                     }]
                 },
@@ -315,37 +314,19 @@
                     maintainAspectRatio: false,
                     plugins: {
                         legend: { display: false },
-                        tooltip: {
-                            enabled: true,
-                            mode: 'index',
-                            intersect: false,
+                        tooltip: { enabled: true, mode: 'index', intersect: false,
                             callbacks: {
-                                label: function(context) {
-                                    if (context.parsed.y !== null) {
-                                       return `김프: ${context.parsed.y.toFixed(2)}%`;
-                                    }
-                                    return null;
-                                }
+                                label: context => context.parsed.y !== null ? `김프: ${context.parsed.y.toFixed(2)}%` : null
                             }
                         }
                     },
                     scales: {
-                        x: {
-                            ticks: {
-                                color: '#9CA3AF',
-                                font: { size: 10 },
-                            },
-                            grid: {
-                                color: 'rgba(255, 255, 255, 0.1)'
-                            }
-                        },
-                        // 계산된 Y축 옵션을 적용합니다.
+                        x: { ticks: { color: '#9CA3AF', font: { size: 10 } }, grid: { color: 'rgba(255, 255, 255, 0.1)' } },
                         y: yAxisOptions
                     }
                 }
             });
         }
-
     </script>
 </body>
 </html>
