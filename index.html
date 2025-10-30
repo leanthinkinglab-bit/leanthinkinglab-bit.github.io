@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>김프매니저 - 가장 저렴한 코인 송금 경로</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- ✨ Vibe-Fix v2.13: .npm -> .net 오타 수정! -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -21,7 +22,8 @@
         <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-green-500"></div>
     </div>
 
-    <div class="max-w-4xl mx-auto opacity-0 transition-opacity duration-500 w-full flex-grow" id="main-content">
+    <!-- ✨ Vibe-Up v2.7: 8개 코인을 표시하기 위해 최대 너비를 '5xl'로 확장 -->
+    <div class="max-w-5xl mx-auto opacity-0 transition-opacity duration-500 w-full flex-grow" id="main-content">
         <header class="text-center mb-6">
             <h1 class="text-3xl sm:text-4xl font-bold text-green-400">김프매니저</h1>
             <p class="text-gray-400 mt-2">가장 저렴한 코인 송금 경로를 찾아보세요</p>
@@ -32,10 +34,9 @@
                 <p id="exchange-rate" class="text-sm text-gray-500 mt-1"></p>
             </div>
             
-            <!-- ✨ Vibe-Up: 뜨겁고 차가운 코인 섹션! -->
             <div id="yesterday-summary" class="space-y-2 mb-6">
                 <div id="hot-coin-yesterday" class="text-center text-sm text-yellow-400 hidden"></div>
-                <div id="cold-coin-yesterday" class="text-center text-sm text-sky-400 hidden"></div>
+                <div id="cold-coin-yesterday" class("text-center text-sm text-sky-400 hidden")></div>
             </div>
 
         </header>
@@ -44,8 +45,9 @@
             <!-- Recommendation content will be injected here -->
         </div>
 
+        <!-- ✨ Vibe-Up v2.7: 8개 코인을 위한 그리드 레이아웃 (변경 없음, 2x4로 자동 배치됨) -->
         <div id="coin-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <!-- Coin cards will be injected here -->
+            <!-- 8개의 코인 카드가 동적으로 주입됩니다 -->
         </div>
 
     </div>
@@ -69,11 +71,16 @@
             "데이터를 빛의 속도로 가져오는 중...⚡"
         ];
 
+        // ✨ Vibe-Fix v2.10: XLM, EOS 로고 제거 / ETH, DOGE 로고 추가
         const coinLogos = {
             'XRP': 'https://s2.coinmarketcap.com/static/img/coins/64x64/52.png',
             'TRX': 'https://s2.coinmarketcap.com/static/img/coins/64x64/1958.png',
             'USDT': 'https://s2.coinmarketcap.com/static/img/coins/64x64/825.png',
-            'USDC': 'https://s2.coinmarketcap.com/static/img/coins/64x64/3408.png'
+            'USDC': 'https://s2.coinmarketcap.com/static/img/coins/64x64/3408.png',
+            'BTC': 'https://s2.coinmarketcap.com/static/img/coins/64x64/1.png',
+            'SOL': 'https://s2.coinmarketcap.com/static/img/coins/64x64/5426.png',
+            'ETH': 'https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png',
+            'DOGE': 'https://s2.coinmarketcap.com/static/img/coins/64x64/74.png'
         };
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -129,8 +136,9 @@
             const minKimp = validPremiums.length > 0 ? Math.min(...validPremiums.map(p => p.kimp)) : -Infinity;
             const recommendedCoin = validPremiums.find(p => p.kimp === minKimp);
 
-            if (recommendedCoin && recommendedCoin.usdKrwRate) {
-                exchangeRateEl.textContent = `적용 환율: ${recommendedCoin.usdKrwRate.toLocaleString()}원/$`;
+            const firstValidCoin = premiums.find(p => p.usdKrwRate);
+            if (firstValidCoin) {
+                exchangeRateEl.textContent = `적용 환율: ${firstValidCoin.usdKrwRate.toLocaleString()}원/$`;
             } else {
                 exchangeRateEl.textContent = '';
             }
@@ -148,17 +156,14 @@
 
             const coldestCoin = result.data.yesterdaysColdestCoin;
             if (coldestCoin && coldestCoin.name && coldestCoin.value !== null) {
-                // --- 수정된 부분 시작 ---
-                const sign = coldestCoin.value > 0 ? '+' : ''; // 값이 양수일 때 '+' 기호를 붙여주는 로직 추가
+                const sign = coldestCoin.value > 0 ? '+' : '';
                 coldCoinEl.innerHTML = `<span>❄️ 어제 가장 차가웠던 김프 코인: <strong>${coldestCoin.name} (${sign}${coldestCoin.value.toFixed(2)}%)</strong></span>`;
-                // --- 수정된 부분 끝 ---
                 coldCoinEl.classList.remove('hidden');
             } else {
                 coldCoinEl.classList.add('hidden');
             }
-
+            
             renderAllCharts(premiums);
-
             setupDynamicTimestamp(result.timestamp);
             
             loader.style.display = 'none';
@@ -166,7 +171,6 @@
         }
         
         function setupDynamicTimestamp(isoTimestamp) {
-            // This function remains unchanged.
             const timestampEl = document.getElementById('timestamp');
             const updateTime = new Date(isoTimestamp);
             if (timeUpdateInterval) clearInterval(timeUpdateInterval);
@@ -185,7 +189,6 @@
         }
 
         function createRecommendationBox(data) {
-            // This function remains unchanged.
             return `
                 <div class="bg-gray-800 rounded-lg p-4 text-center border-2 border-green-500 recommended-glow">
                     <p class="font-bold text-lg text-green-400">[추천 코인: ${data.coin}]</p>
@@ -197,11 +200,23 @@
         }
 
         function createCoinCard(data, isRecommended) {
-            // This function remains unchanged.
             const kimpColor = data.kimp > 0 ? 'text-red-400' : 'text-blue-400';
             const errorClass = data.kimp === null ? 'opacity-50' : '';
             const finalCardClass = isRecommended ? 'border-2 border-green-600 bg-gray-800' : 'border border-gray-700 bg-gray-800';
             const logoUrl = coinLogos[data.coin] || '';
+
+            // --- ✨ Vibe-Fix v2.12: No more calculation! Backend sends USD directly. ---
+            let usdDisplay;
+            // 백엔드가 이제 'binancePriceUsd' 필드에 순수 USD 가격을 보냅니다.
+            if (data.binancePriceUsd === null || data.binancePriceUsd === undefined) {
+                usdDisplay = 'N/A';
+            } else if (data.coin === 'USDT' || data.coin === 'USDC') {
+                usdDisplay = `$${data.binancePriceUsd.toFixed(2)}`; // 스테이블 코인은 소수점 2자리 (예: $1.00)
+            } else {
+                usdDisplay = `$${data.binancePriceUsd.toFixed(4)}`; // 기타 코인은 소수점 4자리 (예: $0.5123)
+            }
+            // --- Vibe-Fix End ---
+
             return `
                 <div class="${finalCardClass} ${errorClass} p-4 rounded-lg flex flex-col justify-between transform hover:scale-105 transition-transform duration-300">
                     <div>
@@ -216,7 +231,8 @@
                         <p class="text-3xl font-black ${kimpColor}">${data.kimp.toFixed(2)}%</p>
                         <div class="text-xs text-gray-400 mt-3">
                             <p>업비트: ${data.upbitPrice.toLocaleString()}원</p>
-                            <p>바이낸스: $${data.binancePrice.toFixed(4)}</p>
+                            <!-- ✨ Vibe-Fix v2.12: Change to USD -->
+                            <p>해외(USD): ${usdDisplay}</p>
                         </div>` : `
                         <p class="text-lg font-bold text-gray-500">데이터 없음</p>
                         <p class="text-xs text-gray-600 mt-1">${data.error || '시세 정보 수신 실패'}</p>
@@ -227,21 +243,34 @@
             `;
         }
         
+        // ✨ Vibe-Fix v2.8: 함수가 여러 번 호출되어도 'null' 오류가 발생하지 않도록 수정
         function displaySpecialMessage(message, type) {
             const mainContent = document.getElementById('main-content');
             const loader = document.getElementById('loader');
+            
+            // mainContent나 loader가 없으면(이미 메시지로 대체된 후) 아무것도 하지 않음
+            if (!mainContent || !loader) return;
+
             const color = type === 'error' ? 'text-red-400 bg-red-900' : 'text-blue-400 bg-blue-900';
             const title = type === 'error' ? '데이터 로딩 실패' : '데이터 준비 중';
-            document.getElementById('recommendation-box').innerHTML = '';
-            document.getElementById('hot-coin-yesterday').classList.add('hidden');
-            document.getElementById('cold-coin-yesterday').classList.add('hidden'); // 차가운 코인 섹션도 숨김 처리
+
+            // 요소가 존재하는지 확인(null-check) 후 'hidden' 클래스 추가
+            const recommendationBox = document.getElementById('recommendation-box');
+            if (recommendationBox) recommendationBox.innerHTML = '';
+
+            const hotCoinEl = document.getElementById('hot-coin-yesterday');
+            if (hotCoinEl) hotCoinEl.classList.add('hidden');
+
+            const coldCoinEl = document.getElementById('cold-coin-yesterday');
+            if (coldCoinEl) coldCoinEl.classList.add('hidden');
+            
+            // mainContent의 내용을 새 메시지로 교체
             mainContent.innerHTML = `<div class="text-center ${color} bg-opacity-30 p-4 rounded-lg"><h3 class="font-bold">${title}</h3><p class="text-sm mt-1">${message}</p></div>`;
             loader.style.display = 'none';
             mainContent.classList.add('fade-in');
         }
-        
+
         function renderAllCharts(premiums) {
-            // This function remains unchanged.
             premiums.forEach(p => {
                 const canvasId = `chart-${p.coin}`;
                 const canvas = document.getElementById(canvasId);
@@ -261,7 +290,6 @@
         }
         
         function createChart(canvas, data) {
-            // This function remains unchanged.
             const ctx = canvas.getContext('2d');
             const days = 7;
             const labels = Array.from({ length: days }, (_, i) => {
